@@ -80,6 +80,12 @@ def build(src: Path, vault_root: Path | None, now: datetime | None = None) -> di
 
 
 def run(src: Path, vault_root: Path, now: datetime | None = None) -> tuple[dict, Path]:
+    """保管庫のロックを取ってから実行する"""
+    with Vault(vault_root).lock():
+        return _run(src, vault_root, now)
+
+
+def _run(src: Path, vault_root: Path, now: datetime | None = None) -> tuple[dict, Path]:
     vault = Vault(vault_root)
     vault.ensure(src)
     index = build(src, vault_root, now)

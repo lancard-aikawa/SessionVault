@@ -40,6 +40,13 @@ def list_versions(vault_root: Path, session: str) -> list[tuple[str, int]]:
 
 def run(src: Path, vault_root: Path, session: str, generation: str | None = None,
         now: datetime | None = None) -> list[Restored]:
+    """保管庫のロックを取ってから実行する"""
+    with Vault(vault_root).lock():
+        return _run(src, vault_root, session, generation, now)
+
+
+def _run(src: Path, vault_root: Path, session: str, generation: str | None = None,
+         now: datetime | None = None) -> list[Restored]:
     now = now or utc_now()
     vault = Vault(vault_root)
     project, main_rel = locate(vault, session)

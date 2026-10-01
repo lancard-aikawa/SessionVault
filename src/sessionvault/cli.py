@@ -14,7 +14,7 @@ from . import repair as repairmod
 from . import restore as restoremod
 from . import verify as verifymod
 from .paths import claude_projects_dir, default_config_path, vault_dir
-from .vault import Vault, display, find_session, long_path, project_child, utc_now, write_bytes_atomic
+from .vault import Vault, VaultLocked, display, find_session, long_path, project_child, utc_now, write_bytes_atomic
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
@@ -162,18 +162,19 @@ def _cmd_repair(args, src: Path, vault: Path, cfg: dict) -> int:
         print("repair: 直すところはありません。元のファイルは変えていません", file=sys.stderr)
         return EXIT_OK
     print(restoremod.CAUTION, file=sys.stderr)
-    # 置き換える前に保管庫へ。backup は書きかけの最後の行を写さないので、元のバイト列もそのまま世代に入れる
-    backed = backupmod.run(src, vault, cfg)
-    if backed.errors:
-        print("backup に失敗したファイルがあるので、置き換えをやめました", file=sys.stderr)
-        return EXIT_PROBLEMS
-    now = utc_now()
     v = Vault(vault)
-    project, rel = project_child(v.mirror, path.parent.name).name, path.name  # 保管庫側の綴りに合わせる
-    stashed = v.stash(project, rel, data, now)
-    write_bytes_atomic(path, result.data)
-    v.log(now, op="repair", project=project, path=rel, size=len(result.data),
-          stashed=stashed.relative_to(v.root).as_posix(), notes=len(result.notes))
+    with v.lock():  # backup から置き換えまでを 1 つのロックの中で
+        # 置き換える前に保管庫へ。backup は書きかけの最後の行を写さないので、元のバイト列もそのまま世代に入れる
+        backed = backupmod.run(src, vault, cfg)
+        if backed.errors:
+            print("backup に失敗したファイルがあるので、置き換えをやめました", file=sys.stderr)
+            return EXIT_PROBLEMS
+        now = utc_now()
+        project, rel = project_child(v.mirror, path.parent.name).name, path.name  # 保管庫側の綴りに合わせる
+        stashed = v.stash(project, rel, data, now)
+        write_bytes_atomic(path, result.data)
+        v.log(now, op="repair", project=project, path=rel, size=len(result.data),
+              stashed=stashed.relative_to(v.root).as_posix(), notes=len(result.notes))
     print(f"repair: {len(result.notes)} か所を直して置き換えました（前の版: {stashed.relative_to(v.root).as_posix()}）",
           file=sys.stderr)
     return EXIT_OK
@@ -242,6 +243,14 @@ def main(argv: list[str] | None = None) -> int:
 
     src = Path(args.src) if args.src else claude_projects_dir()
     vault = vault_dir(args.vault, cfg["vault"])
+    try:
+        return _dispatch(args, src, vault, cfg)
+    except VaultLocked as e:
+        print(e, file=sys.stderr)
+        return EXIT_PROBLEMS
+
+
+def _dispatch(args, src: Path, vault: Path, cfg: dict) -> int:
     if args.command == "backup":
         return _cmd_backup(src, vault, cfg)
     if args.command == "prune":

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sessionvault import backup, prune
+from sessionvault import vault as vaultmod
 from sessionvault.cli import main
 from sessionvault.config import DEFAULTS
 from sessionvault.vault import Vault, long_path, ts
@@ -74,7 +75,7 @@ class BackupTest(unittest.TestCase):
         rels = sorted(t.rel for t in backup.iter_targets(self.src))
         self.assertEqual(rels, [f"{SID}.jsonl", f"{SID}/subagents/agent-x.jsonl",
                                 f"{SID}/subagents/agent-x.meta.json", f"{SID}/tool-results/r1.txt",
-                                "memory/MEMORY.md"])
+                                "memory/MEMORY.md", "sessions-index.json"])
         self.assertNotIn("memory/MEMORY.md", [t.rel for t in backup.iter_targets(self.src, include_memory=False)])
 
     def test_new_then_unchanged_then_grow(self):
@@ -172,6 +173,31 @@ class BackupTest(unittest.TestCase):
         self.write(Path(long_path(self.proj)) / rel, "y")
         r = backup.run(self.src, deep, DEFAULTS, T0)
         self.assertEqual((r.counts, r.errors), ({"change": 1}, []))
+
+    def test_lock_blocks_other_holder_and_is_reentrant(self):
+        self.write(self.session, line("a"))
+        self.vault.root.mkdir(parents=True)
+        # 別のプロセスがロックを持っている状態を、別のハンドルで取ってまねる
+        with open(self.vault.root / "lock", "a+b") as other:
+            vaultmod._try_lock(other)
+            with self.assertRaises(vaultmod.VaultLocked):
+                self.run_backup()
+            vaultmod._unlock(other)
+        with self.vault.lock():
+            self.assertEqual(self.run_backup().counts, {"new": 1})  # 同じプロセスの中なら入れ子で取れる
+        self.assertEqual(vaultmod._held, {})
+
+    def test_cli_reports_lock(self):
+        self.vault.root.mkdir(parents=True)
+        with open(self.vault.root / "lock", "a+b") as other:
+            vaultmod._try_lock(other)
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                code = main(["--config", str(Path(self.tmp.name) / "none.json"), "--src", str(self.src),
+                             "--vault", str(self.vault.root), "backup"])
+            vaultmod._unlock(other)
+        self.assertEqual(code, 1)
+        self.assertIn("別の sessionvault", err.getvalue())
 
     def test_vault_format_too_new_is_refused(self):
         self.vault.root.mkdir(parents=True)

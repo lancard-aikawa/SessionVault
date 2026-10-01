@@ -2,11 +2,40 @@
 import json
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 FORMAT = 1
 TS_FORMAT = "%Y%m%dT%H%M%SZ"
+LOCK_NAME = "lock"
+
+_held: dict[str, int] = {}   # このプロセスが持っている保管庫のロック（入れ子で取れるように数える）
+
+
+class VaultLocked(Exception):
+    pass
+
+
+def _try_lock(f) -> None:
+    """取れなければ OSError。プロセスが落ちれば OS が外すので、取り残されない"""
+    f.seek(0)
+    if sys.platform == "win32":
+        import msvcrt
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock(f) -> None:
+    f.seek(0)
+    if sys.platform == "win32":
+        import msvcrt
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def utc_now() -> datetime:
@@ -51,6 +80,32 @@ class Vault:
         self.generations = self.root / "generations"
         self.log_dir = self.root / "log"
         self.index_dir = self.root / "index"
+
+    @contextmanager
+    def lock(self):
+        """保管庫に書くあいだ持つロック。定期実行と手動の実行が重なっても、片方は待たずに VaultLocked で止まる"""
+        key = str(self.root).casefold()
+        if _held.get(key):
+            _held[key] += 1
+            try:
+                yield
+            finally:
+                _held[key] -= 1
+            return
+        self.root.mkdir(parents=True, exist_ok=True)
+        f = open(self.root / LOCK_NAME, "a+b")
+        try:
+            _try_lock(f)
+        except OSError:
+            f.close()
+            raise VaultLocked(f"別の sessionvault が保管庫を使っています。終わってからもう一度実行してください: {display(self.root)}")
+        _held[key] = 1
+        try:
+            yield
+        finally:
+            del _held[key]
+            _unlock(f)
+            f.close()
 
     def ensure(self, src: Path) -> None:
         """vault.json が無ければ作る。形式の版が新しすぎれば止める"""

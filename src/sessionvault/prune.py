@@ -48,10 +48,11 @@ def plan(vault: Vault, retention: dict, now: datetime) -> list[Path]:
 
 
 def run(vault: Vault, retention: dict, now: datetime, dry_run: bool = False) -> list[Path]:
-    doomed = plan(vault, retention, now)
     if dry_run:
-        return doomed
-    for f in doomed:
-        f.unlink()
-        vault.log(now, op="prune", generation=f.relative_to(vault.root).as_posix())
+        return plan(vault, retention, now)
+    with vault.lock():
+        doomed = plan(vault, retention, now)
+        for f in doomed:
+            f.unlink()
+            vault.log(now, op="prune", generation=f.relative_to(vault.root).as_posix())
     return doomed

@@ -14,6 +14,7 @@
 | `<session-id>/tool-results/*` | 長いツール結果を外に出したもの | ○ |
 | `<session-id>/auto-mode-classifier-error.txt` など | 診断用の出力 | × |
 | `memory/*.md` | 自動メモリ | ○（§1.1） |
+| `sessions-index.json` | 古い版の Claude Code が書いた索引（要約と最初の依頼文）。2026-10-01 に 2026 年 1〜2 月のものが 2 件 | ○（変わったら世代に入れる） |
 
 `<project-dir>` は作業フォルダのパスを `C--work-claude` のように変換した名前。Claude Code が決めるので、そのまま使う。
 ただし**大文字・小文字が揺れる**（同じプロジェクトでセッションは `C--Repos-example-app`、memory は `c--Repos-example-app` にあった）。
@@ -68,6 +69,7 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
   log/<YYYY-MM>.jsonl                backup / prune / repair / restore の記録（1 行 1 件）
   index/memory.json                  memory と、それを書いたセッションの対応（§1.1）
   index/src-missing.json             元から消えたと気づいたもの {"<project-dir>/<relpath>": 気づいた時刻}
+  lock                               書き込むあいだ持つロック（§2.2）
 ```
 
 - 世代は名前に `@時刻` が付くので、パスが Windows の 260 文字を超えやすい（2026-10-01 に tool-results の長い名前で実際に失敗した）。
@@ -105,6 +107,17 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
 - `vault.json` の `format` は整数。形式を変えたら上げて、古い保管庫を移す処理を書く
 - 時刻は UTC。ファイル名に `:` は使えないので基本形式で書く
 
+### 2.2 同時に動かしたとき
+
+定期実行と手動の実行、Viewer からの呼び出しが重なることがある。保管庫に書く処理（backup・prune・import・memory-index・restore・`repair --in-place`）は、
+`<vault>/lock` に OS のファイルロック（Windows は `msvcrt.locking`、ほかは `flock`）を取ってから動く。
+
+- 取れなければ待たずに `VaultLocked` で止まる。CLI は終了コード 1。次の定期実行で取り直せばよいので、待ち合わせはしない
+- プロセスが落ちれば OS がロックを外すので、取り残されて動かなくなることはない（ファイルが残っていても中身は見ない）
+- 同じプロセスの中では入れ子で取れる（`repair --in-place` が backup を呼ぶ）
+- verify と `restore --list`・`prune --dry-run` は読むだけなのでロックを取らない。backup の途中に読んでも、ファイルは `os.replace` で置き換わるので書きかけは見えない
+- 2026-10-01 に 2 つのプロセスで同時に backup を走らせ、後の方が止まり、先の方が最後まで写すことを確かめた
+
 ## 3. backup の規則
 
 ファイルごとに、元 (`src`) と `mirror` を比べて次のどれかにする。
@@ -125,6 +138,7 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
 - Claude Code が書いている最中のファイルを読むと、最後の行が途中で切れていることがある。最後の行が改行で終わっていなければ、その行を除いた長さまでをコピーする。改行で終わる行が 1 つも無ければ写さない
 - 保管庫に同じプロジェクトが別の綴り（`C--` と `c--`）で既にあれば、そちらへ入れる
 - 読めないファイルがあっても止めずに残りを写し、最後に一覧を出して終了コード 1
+- 別の sessionvault が保管庫を使っていれば、待たずに終了コード 1 で止まる（§2.2）
 ### 3.1 世代の間引き
 
 設定の `retention` で決める。backup の最後に実行し、`sessionvault prune` で単独でも実行できる（`--dry-run` で消すものを表示するだけ）。
@@ -209,7 +223,6 @@ Viewer は `~/.claude/chat-viewer-archive/projects/`（`archive_dir` が空の�
 ## 7. 決めていないこと
 
 - exe にするときの配布の仕方（PkgUpdater と同じ PyInstaller で足りるか）
-- プロジェクト直下の `sessions-index.json`（2026-10-01 に 2 件だけあった）を守る対象に入れるか。今は入れていない
 - memory の索引を Viewer でどう見せるか
 
 ### 決めたこと（2026-10-01）

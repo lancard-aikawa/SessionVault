@@ -37,6 +37,8 @@ def iter_targets(src: Path, include_memory: bool = True):
             if entry.is_file():
                 if entry.suffix == ".jsonl":
                     yield Target(project.name, entry.name, entry, True)
+                elif entry.name == "sessions-index.json":  # 古い版の索引。要約と最初の依頼文が入っている
+                    yield Target(project.name, entry.name, entry, False)
             elif entry.name == "memory":
                 if include_memory:
                     for f in sorted(entry.rglob("*.md")):
@@ -98,6 +100,12 @@ def _mirror_files(vault: Vault):
 
 
 def run(src: Path, vault_root: Path, cfg: dict, now: datetime | None = None) -> Result:
+    """保管庫のロックを取ってから実行する"""
+    with Vault(vault_root).lock():
+        return _run(src, vault_root, cfg, now)
+
+
+def _run(src: Path, vault_root: Path, cfg: dict, now: datetime | None = None) -> Result:
     now = now or utc_now()
     src = long_path(src)
     vault = Vault(vault_root)

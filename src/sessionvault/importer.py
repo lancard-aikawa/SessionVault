@@ -17,6 +17,12 @@ class Imported:
 
 
 def run(other: Path, src: Path, vault_root: Path, now: datetime | None = None) -> Imported:
+    """保管庫のロックを取ってから実行する"""
+    with Vault(vault_root).lock():
+        return _run(other, src, vault_root, now)
+
+
+def _run(other: Path, src: Path, vault_root: Path, now: datetime | None = None) -> Imported:
     """mirror に無いものは mirror へ。JSONL で mirror の続きなら mirror を伸ばし、mirror の先頭部分なら何もしない。
     それ以外で中身が違えば、取り込む側を世代に入れる（mirror は変えない）"""
     now = now or utc_now()
