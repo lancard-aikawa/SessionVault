@@ -128,15 +128,25 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
 
 | 検査 | 重さ | 説明 |
 |---|---|---|
-| `bad-json` | エラー | JSON として読めない行。最後の行だけなら `truncated-tail` として区別する |
-| `no-newline` | 警告 | ファイルが改行で終わっていない |
-| `dangling-parent` | エラー | `parentUuid` が同じファイル（とサブエージェント）のどの `uuid` にも無い |
-| `duplicate-uuid` | 警告 | 同じ `uuid` が 2 回以上ある |
-| `diverged` | エラー | src が mirror より短い、または先頭が一致しない（backup 前の検出） |
+| `bad-json` | エラー | JSON として読めない行（UTF-8 として読めない行も含む） |
+| `truncated-tail` | 警告 | 最後の行が JSON として読めず、改行でも終わっていない。Claude Code が書いている最中にも起きる |
+| `no-newline` | 警告 | ファイルが改行で終わっていない（最後の行は読める）。`truncated-tail` と重ねては出さない |
+| `dangling-parent` | エラー | `parentUuid` が同じセッション（本体とサブエージェント）のどの `uuid` にも無い |
+| `duplicate-uuid` | 警告 | 同じファイルに同じ `uuid` が 2 回以上ある |
+| `diverged` | エラー | src が mirror より短い、または先頭が一致しない（backup 前の検出）。書きかけの最後の行は数えない |
 | `src-missing` | 情報 | mirror にはあるが src に無い（自動削除か手で消したもの） |
+| `unreadable` | エラー | ファイルを開けない |
 
-- 終了コード: 0 = 問題なし、1 = エラーあり、2 = 引数の誤り
-- `--json` で、1 件 1 オブジェクトの配列 `{session, project, path, check, severity, line, detail}` を出す。RepoTether はこれを読む
+- 検査するのは JSONL（セッション本体とサブエージェント）だけ。memory・meta・tool-results は中身の形を検査しない（`src-missing` だけ見る）
+- 保管庫が無ければ、保管庫を使う検査（`diverged` `src-missing`）は飛ばす。verify は保管庫にも何も書かない
+- 終了コード: 0 = エラーなし（警告・情報だけなら 0）、1 = エラーあり、2 = 引数の誤り
+- `--json` で、1 件 1 オブジェクトの配列 `{session, project, path, check, severity, line, detail}` を出す。RepoTether はこれを読む。
+  コンソールの文字コード（日本語の Windows では cp932）に左右されないよう、日本語は `\uXXXX` にして ASCII だけで出す
+- 並びはエラー → 警告 → 情報、その中はプロジェクト・パス・行の順
+
+2026-10-01 の実測（408 ファイル・815 MB・14 万行）: 4.7 秒（ディスクキャッシュに乗っていないと 21 秒）。ほとんどが JSON の解析。
+出たのは `duplicate-uuid` 3 件だけで、どれも同じ uuid・親・時刻の tool_result が約 1,200 行後にもう一度書かれたもの（行のバイト列は同一ではない）。
+Claude Code の書き直しとみて警告のままにする。
 
 ## 5. repair と restore
 

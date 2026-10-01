@@ -11,7 +11,7 @@ Python 標準ライブラリだけで動く。Claude History Viewer からはラ
 
 memory（`~/.claude/projects/<project>/memory/`）も世代付きで残す。セッションの記録から「どの会話でその memory を書いたか」を拾い、memory を会話の索引として使えるようにする（`memory-index`）。
 
-> **状態: 作りかけ。**動くのは `config`・`backup`・`prune`。ほかのサブコマンドは引数を受け付けるが、実行すると「未実装」で終わる。
+> **状態: 作りかけ。**動くのは `config`・`backup`・`prune`・`verify`。ほかのサブコマンドは引数を受け付けるが、実行すると「未実装」で終わる。
 > 設計は [docs/design.md](docs/design.md)。
 
 ## なぜ作るか

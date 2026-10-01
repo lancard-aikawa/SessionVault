@@ -8,6 +8,7 @@ from . import __version__
 from . import backup as backupmod
 from . import config as cfgmod
 from . import prune as prunemod
+from . import verify as verifymod
 from .paths import claude_projects_dir, default_config_path, vault_dir
 from .vault import Vault, utc_now
 
@@ -113,6 +114,26 @@ def _cmd_prune(args, vault: Path, cfg: dict) -> int:
     return EXIT_OK
 
 
+def _cmd_verify(args, src: Path, vault: Path, cfg: dict) -> int:
+    if not src.is_dir():
+        print(f"元の場所がありません: {src}", file=sys.stderr)
+        return EXIT_USAGE
+    findings = verifymod.run(src, vault, args.session, cfg.get("include_memory", True))
+    if args.json:
+        # 読む側（RepoTether）がコンソールの文字コードに左右されないよう ASCII だけで出す
+        print(json.dumps([f.to_dict() for f in findings], ensure_ascii=True, indent=1))
+    else:
+        for f in findings:
+            where = f"{f.project}/{f.path}" + (f":{f.line}" if f.line else "")
+            print(f"{f.severity:7} {f.check:16} {where}  {f.detail}")
+    counts = {}
+    for f in findings:
+        counts[f.severity] = counts.get(f.severity, 0) + 1
+    summary = ", ".join(f"{k} {counts[k]}" for k in (verifymod.ERROR, verifymod.WARNING, verifymod.INFO) if k in counts)
+    print(f"verify: {summary or '問題なし'}", file=sys.stderr)
+    return EXIT_PROBLEMS if counts.get(verifymod.ERROR) else EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     config_path = Path(args.config) if args.config else default_config_path()
@@ -131,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_backup(src, vault, cfg)
     if args.command == "prune":
         return _cmd_prune(args, vault, cfg)
+    if args.command == "verify":
+        return _cmd_verify(args, src, vault, cfg)
     print(f"{args.command}: 未実装です（src={src}, vault={vault}）", file=sys.stderr)
     return EXIT_USAGE
 
