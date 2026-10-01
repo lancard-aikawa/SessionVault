@@ -93,10 +93,11 @@ class PathsTest(unittest.TestCase):
             self.assertEqual(vault_dir(), app_dir() / "vault")
 
     def test_project_dir_name_matches_claude_code(self):
-        # 2026-10-01 に ~/.claude/projects の実際の名前と照らした例
+        # 英数字以外はすべて - になる（2026-10-01 に ~/.claude/projects の実際の名前 24 件で確かめた規則。
+        # UNC パスは実際に --<サーバ>-... の名前だったものを、架空の名前に置き換えている）
         self.assertEqual(project_dir_name("C:\\Repos\\mywork\\SessionVault"), "C--Repos-mywork-SessionVault")
         self.assertEqual(project_dir_name("F:\\Repos\\My\\ssldate"), "F--Repos-My-ssldate")
-        self.assertEqual(project_dir_name("//192.168.10.35/html/ags/scp/asp/250"), "--192-168-10-35-html-ags-scp-asp-250")
+        self.assertEqual(project_dir_name("//fileserver.example/share/app_1"), "--fileserver-example-share-app-1")
         self.assertEqual(as_project_dir("C--Repos-x"), "C--Repos-x")
         self.assertEqual(as_project_dir("C:/Repos/x_y"), "C--Repos-x-y")
 
