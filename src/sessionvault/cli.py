@@ -232,7 +232,16 @@ def _cmd_memory_index(src: Path, vault: Path) -> int:
     return EXIT_OK
 
 
+def _utf8_when_piped() -> None:
+    """コンソールでなく、パイプやファイルに出すときは UTF-8 にする。日本語の Windows の既定は cp932 で、
+    呼ぶ側（RepoTether は UTF-8 として読む）で化ける。exe では PYTHONIOENCODING が効かないのでここで変える"""
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure") and not stream.isatty():
+            stream.reconfigure(encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_when_piped()
     args = _build_parser().parse_args(argv)
     config_path = Path(args.config) if args.config else default_config_path()
     try:
