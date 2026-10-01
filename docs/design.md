@@ -203,7 +203,7 @@ Claude Code の書き直しとみて警告のままにする。
 |---|---|
 | Claude History Viewer | `sessionvault` をパッケージとして読み込み、`archive.py` の代わりに `backup.run()` を呼ぶ。設定ファイルの場所は Viewer が渡す。読み込み元は `mirror/` |
 | RepoTether | `sessionvault.exe verify --json` を呼んで結果を表示する。書き込む操作は呼ばない（RepoTether は読むだけの方針） |
-| 定期実行 | タスクスケジューラで `sessionvault backup` を 30 分ごととログオン時（`scriptsegister-task.ps1`）。`.venvScriptspythonw.exe -m sessionvault backup` で窓を出さない。`SessionEnd` フックは使っていない |
+| 定期実行 | タスクスケジューラで `sessionvault backup` を 30 分ごととログオン時（`scripts/register-task.ps1`）。`.venv/Scripts/pythonw.exe -m sessionvault backup` で窓を出さない。`SessionEnd` フックは使っていない |
 
 ### Viewer の既存のバックアップからの移行
 
