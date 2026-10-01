@@ -222,10 +222,16 @@ Viewer は `~/.claude/chat-viewer-archive/projects/`（`archive_dir` が空の�
 
 ## 7. 決めていないこと
 
-- exe にするときの配布の仕方（PkgUpdater と同じ PyInstaller で足りるか）
 - memory の索引を Viewer でどう見せるか
+- RepoTether・Viewer へのつなぎ込み（どちらも別のリポジトリでの作業）
+- `diverged` を repair で直すときの選ばせ方（§5）
 
 ### 決めたこと（2026-10-01）
+
+- exe は PyInstaller の onedir（`scripts/build-exe.cmd`）。PyInstaller は依存グループ `build` に置き、実行時の依存にはしない。
+  onefile にしないのは、呼ばれるたびに展開する分だけ起動が遅くなるため（onedir で起動 128 ms）
+- 定期実行はタスクスケジューラ（`scripts/register-task.ps1`）。exe ではなく `.venv` の `pythonw.exe` で動かし、窓を出さず、リポジトリの保管庫を使う
+- `sessions-index.json` も守る（§1）
 
 - memory も守る。世代付きで残し、セッションの記録から「どの会話で書いたか」の索引を作る（§1.1）
 - 保管庫の既定はプログラムの置き場所の下。設定ファイルか `config set` で変える（§2.1）

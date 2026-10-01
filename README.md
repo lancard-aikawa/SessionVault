@@ -56,6 +56,21 @@ pwsh -File scripts\register-task.ps1 -Unregister    :: 消す
 結果は保管庫の `log/` と、タスクの「前回の実行結果」（0 = 成功、1 = 読めないファイルがあった・別の実行と重なった）で見る。
 重なったときは次の回で取り直すので、放っておいてよい。
 
+## exe にする
+
+```cmd
+scripts\build-exe.cmd        :: dist\sessionvault\sessionvault.exe（PyInstaller の onedir、約 20 MB、30 秒ほど）
+```
+
+exe では、設定ファイルと保管庫の既定の場所が **exe のあるフォルダ**になる。リポジトリで動かしている保管庫を exe からも使うなら、
+exe の隣に設定を置いて保管庫を指す。
+
+```cmd
+dist\sessionvault\sessionvault.exe config set vault C:\Repos\mywork\SessionVault\vault
+```
+
+2026-10-01 の実測: 起動 128 ms、`verify --json`（本番の保管庫、408 ファイル）8.2 秒。
+
 ## 設定
 
 保管庫は既定でプログラムの置き場所の下（exe ならそのフォルダ、リポジトリから動かすならリポジトリ直下）の `vault/` に作る。
