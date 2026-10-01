@@ -43,6 +43,19 @@ uv run sessionvault memory-index                            :: memory ごとに�
 repair と restore は `~/.claude/` を書き換える。対象のセッションを Claude Code で開いていないときに使う。
 `repair --in-place` のあと、壊れる前の版は mirror ではなく世代の側にある（`restore --list` で見る）。
 
+## 定期実行
+
+タスクスケジューラに 30 分ごと（とログオン時）の backup を登録する。リポジトリの `.venv` の `pythonw.exe` で動くので窓は開かない。
+
+```cmd
+uv sync
+pwsh -File scripts\register-task.ps1                :: 登録（-Minutes 15 で間隔を変える）
+pwsh -File scripts\register-task.ps1 -Unregister    :: 消す
+```
+
+結果は保管庫の `log/` と、タスクの「前回の実行結果」（0 = 成功、1 = 読めないファイルがあった・別の実行と重なった）で見る。
+重なったときは次の回で取り直すので、放っておいてよい。
+
 ## 設定
 
 保管庫は既定でプログラムの置き場所の下（exe ならそのフォルダ、リポジトリから動かすならリポジトリ直下）の `vault/` に作る。
