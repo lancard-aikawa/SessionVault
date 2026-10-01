@@ -8,9 +8,11 @@ from . import __version__
 from . import backup as backupmod
 from . import config as cfgmod
 from . import prune as prunemod
+from . import repair as repairmod
+from . import restore as restoremod
 from . import verify as verifymod
 from .paths import claude_projects_dir, default_config_path, vault_dir
-from .vault import Vault, utc_now
+from .vault import Vault, find_session, long_path, project_child, utc_now, write_bytes_atomic
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
@@ -39,7 +41,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("restore", help="保管庫から元の場所へ戻す")
     s.add_argument("session", help="セッション ID")
-    s.add_argument("--generation", help="戻す世代（省略時は mirror）")
+    sg = s.add_mutually_exclusive_group()
+    sg.add_argument("--generation", help="戻す世代（--list で出る名前。省略時は mirror）")
+    sg.add_argument("--list", action="store_true", help="戻せる版を一覧するだけ")
 
     i = sub.add_parser("import", help="他のバックアップ（Viewer の archive など）を保管庫へ取り込む")
     i.add_argument("dir", help="projects と同じ木の形のフォルダ")
@@ -134,6 +138,64 @@ def _cmd_verify(args, src: Path, vault: Path, cfg: dict) -> int:
     return EXIT_PROBLEMS if counts.get(verifymod.ERROR) else EXIT_OK
 
 
+def _cmd_repair(args, src: Path, vault: Path, cfg: dict) -> int:
+    hits = find_session(long_path(src), args.session)
+    if len(hits) != 1:
+        where = "見つかりません" if not hits else "複数のプロジェクトにあります: " + ", ".join(h.parent.name for h in hits)
+        print(f"セッション {args.session} が{where}", file=sys.stderr)
+        return EXIT_USAGE
+    path = hits[0]
+    data = path.read_bytes()
+    result = repairmod.repair_bytes(data, repairmod.subagent_uuids(path))
+    for no, note in result.notes:
+        print(f"{no} 行目: {note}")
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(result.data)
+        print(f"repair: {len(result.notes)} か所 → {out}" if result.changed else f"repair: 直すところはありません（そのまま {out} に書きました）",
+              file=sys.stderr)
+        return EXIT_OK
+    if not result.changed:
+        print("repair: 直すところはありません。元のファイルは変えていません", file=sys.stderr)
+        return EXIT_OK
+    print(restoremod.CAUTION, file=sys.stderr)
+    # 置き換える前に保管庫へ。backup は書きかけの最後の行を写さないので、元のバイト列もそのまま世代に入れる
+    backed = backupmod.run(src, vault, cfg)
+    if backed.errors:
+        print("backup に失敗したファイルがあるので、置き換えをやめました", file=sys.stderr)
+        return EXIT_PROBLEMS
+    now = utc_now()
+    v = Vault(vault)
+    project, rel = project_child(v.mirror, path.parent.name).name, path.name  # 保管庫側の綴りに合わせる
+    stashed = v.stash(project, rel, data, now)
+    write_bytes_atomic(path, result.data)
+    v.log(now, op="repair", project=project, path=rel, size=len(result.data),
+          stashed=stashed.relative_to(v.root).as_posix(), notes=len(result.notes))
+    print(f"repair: {len(result.notes)} か所を直して置き換えました（前の版: {stashed.relative_to(v.root).as_posix()}）",
+          file=sys.stderr)
+    return EXIT_OK
+
+
+def _cmd_restore(args, src: Path, vault: Path) -> int:
+    try:
+        if args.list:
+            for name, size in restoremod.list_versions(vault, args.session):
+                print(f"{name:24} {size:>12,} バイト")
+            return EXIT_OK
+        print(restoremod.CAUTION, file=sys.stderr)
+        done = restoremod.run(src, vault, args.session, args.generation)
+    except restoremod.RestoreError as e:
+        print(e, file=sys.stderr)
+        return EXIT_USAGE
+    for r in done:
+        extra = f"（前の版: {r.stashed.name}）" if r.stashed else ""
+        print(f"{'戻した' if r.action == 'restored' else '同じ  '} {r.rel}{extra}")
+    n = sum(r.action == "restored" for r in done)
+    print(f"restore: {n} ファイルを戻しました", file=sys.stderr)
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     config_path = Path(args.config) if args.config else default_config_path()
@@ -154,6 +216,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_prune(args, vault, cfg)
     if args.command == "verify":
         return _cmd_verify(args, src, vault, cfg)
+    if args.command == "repair":
+        return _cmd_repair(args, src, vault, cfg)
+    if args.command == "restore":
+        return _cmd_restore(args, src, vault)
     print(f"{args.command}: 未実装です（src={src}, vault={vault}）", file=sys.stderr)
     return EXIT_USAGE
 

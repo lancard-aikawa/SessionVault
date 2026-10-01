@@ -11,7 +11,7 @@ Python 標準ライブラリだけで動く。Claude History Viewer からはラ
 
 memory（`~/.claude/projects/<project>/memory/`）も世代付きで残す。セッションの記録から「どの会話でその memory を書いたか」を拾い、memory を会話の索引として使えるようにする（`memory-index`）。
 
-> **状態: 作りかけ。**動くのは `config`・`backup`・`prune`・`verify`。ほかのサブコマンドは引数を受け付けるが、実行すると「未実装」で終わる。
+> **状態: 作りかけ。**動くのは `config`・`backup`・`prune`・`verify`・`repair`・`restore`。ほかのサブコマンドは引数を受け付けるが、実行すると「未実装」で終わる。
 > 設計は [docs/design.md](docs/design.md)。
 
 ## なぜ作るか
@@ -24,14 +24,15 @@ Claude History Viewer (`F:\Repos\My\ClaudeChat`) の `claudehistory/archive.py` 
 
 この 3 点を、Viewer から切り離した道具として直す。
 
-## 使い方（予定）
+## 使い方
 
 ```cmd
 uv run sessionvault backup                 :: ~/.claude/projects を保管庫へ
 uv run sessionvault verify                 :: 元と保管庫を検査（問題があれば終了コード 1）
 uv run sessionvault verify --json          :: RepoTether 向けの機械可読な出力
 uv run sessionvault repair <session-id> --out fixed.jsonl
-uv run sessionvault restore <session-id>
+uv run sessionvault restore <session-id> --list   :: 戻せる版の一覧
+uv run sessionvault restore <session-id> --generation 20261001T022703Z
 ```
 
 ## 設定

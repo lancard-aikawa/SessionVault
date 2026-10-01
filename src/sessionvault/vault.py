@@ -63,17 +63,35 @@ class Vault:
         with open(path, "a", encoding="utf-8", newline="\n") as f:
             f.write(line + "\n")
 
-    def push_generation(self, project: str, rel: str, when: datetime) -> Path:
-        """mirror のファイルを generations へ移す。同じ秒に 2 回押し出したら -1, -2 … を付ける"""
-        cur = self.mirror / project / rel
+    def new_generation_path(self, project: str, rel: str, when: datetime) -> Path:
+        """まだ使われていない世代の場所。同じ秒に 2 回押し出したら -1, -2 … を付ける"""
         base = self.generations / project / f"{rel}@{ts(when)}"
         dest, n = base, 0
         while dest.exists():
             n += 1
             dest = base.with_name(f"{base.name}-{n}")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(cur, dest)
         return dest
+
+    def push_generation(self, project: str, rel: str, when: datetime) -> Path:
+        """mirror のファイルを generations へ移す"""
+        dest = self.new_generation_path(project, rel, when)
+        os.replace(self.mirror / project / rel, dest)
+        return dest
+
+    def stash(self, project: str, rel: str, data: bytes, when: datetime) -> Path:
+        """元の場所を上書きする前に、その中身を世代として残す"""
+        dest = self.new_generation_path(project, rel, when)
+        write_bytes_atomic(dest, data)
+        return dest
+
+    def generations_of(self, project: str, rel: str) -> list[tuple[str, Path]]:
+        """rel の世代を古い順に [(名前の @ より後ろ, パス)]"""
+        d = (self.generations / project / rel).parent
+        name = rel.rsplit("/", 1)[-1] + "@"
+        if not d.is_dir():
+            return []
+        return sorted((f.name[len(name):], f) for f in d.iterdir() if f.is_file() and f.name.startswith(name))
 
 
 def write_json(path: Path, data) -> None:
@@ -99,6 +117,15 @@ def write_bytes_atomic(path: Path, data: bytes) -> None:
     with open(tmp, "wb") as f:
         f.write(data)
     os.replace(tmp, path)
+
+
+def find_session(root: Path, session: str) -> list[Path]:
+    """root（projects と同じ木の形）から <session>.jsonl を探す。大文字・小文字は無視する"""
+    key = f"{session}.jsonl".casefold()
+    if not root.is_dir():
+        return []
+    return sorted(f for p in root.iterdir() if p.is_dir()
+                  for f in p.iterdir() if f.is_file() and f.name.casefold() == key)
 
 
 def project_child(root: Path, name: str) -> Path:

@@ -28,8 +28,7 @@ class CliTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_unimplemented_subcommands_parse(self):
-        for argv in (["repair", "abc", "--out", "x.jsonl"],
-                     ["restore", "abc"], ["memory-index"]):
+        for argv in (["import", "x"], ["memory-index"]):
             with self.subTest(argv=argv):
                 self.assertEqual(run(["--config", self.config, *argv])[0], 2)  # まだ未実装
 
