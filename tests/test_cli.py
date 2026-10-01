@@ -9,7 +9,7 @@ from unittest import mock
 
 from sessionvault import config as cfgmod
 from sessionvault.cli import main
-from sessionvault.paths import ENV_VAULT, app_dir, vault_dir
+from sessionvault.paths import ENV_VAULT, app_dir, as_project_dir, project_dir_name, vault_dir
 
 
 def run(argv):
@@ -91,6 +91,14 @@ class PathsTest(unittest.TestCase):
             os.environ.pop(ENV_VAULT, None)
             self.assertEqual(vault_dir(None, "E:/cfg"), Path("E:/cfg"))
             self.assertEqual(vault_dir(), app_dir() / "vault")
+
+    def test_project_dir_name_matches_claude_code(self):
+        # 2026-10-01 に ~/.claude/projects の実際の名前と照らした例
+        self.assertEqual(project_dir_name("C:\\Repos\\mywork\\SessionVault"), "C--Repos-mywork-SessionVault")
+        self.assertEqual(project_dir_name("F:\\Repos\\My\\ssldate"), "F--Repos-My-ssldate")
+        self.assertEqual(project_dir_name("//192.168.10.35/html/ags/scp/asp/250"), "--192-168-10-35-html-ags-scp-asp-250")
+        self.assertEqual(as_project_dir("C--Repos-x"), "C--Repos-x")
+        self.assertEqual(as_project_dir("C:/Repos/x_y"), "C--Repos-x-y")
 
     def test_app_dir_is_repo_root_when_not_frozen(self):
         self.assertTrue((app_dir() / "pyproject.toml").is_file())

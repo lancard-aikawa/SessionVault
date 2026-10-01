@@ -103,6 +103,19 @@ class VerifyTest(unittest.TestCase):
         self.assertEqual({f.path for f in verify.run(self.src, session=SID2.upper())},
                          {f"{SID2}.jsonl", f"{SID2}/subagents/agent-y.jsonl"})
 
+    def test_project_filter_accepts_folder_path(self):
+        self.write(self.session, "{bad\n")
+        other = self.src / "C--work-other"
+        self.write(other / f"{SID2}.jsonl", "{bad\n")
+        backup.run(self.src, self.vault, DEFAULTS, T0)
+        (other / f"{SID2}.jsonl").unlink()
+        self.assertEqual({f.project for f in verify.run(self.src, self.vault)}, {"C--work-demo", "C--work-other"})
+        found = verify.run(self.src, self.vault, project="c--WORK-other")
+        self.assertEqual([(f.project, f.check) for f in found], [("C--work-other", "src-missing")])
+        code, out, _ = self.run_cli("verify", "--json", "--project", "C:\\work\\demo")
+        self.assertEqual(code, 1)
+        self.assertEqual({x["project"] for x in json.loads(out)}, {"C--work-demo"})
+
     def test_missing_vault_is_fine(self):
         self.write(self.session, rec("a"))
         self.assertEqual(self.checks(vault=self.vault), [])

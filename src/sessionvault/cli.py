@@ -13,7 +13,7 @@ from . import prune as prunemod
 from . import repair as repairmod
 from . import restore as restoremod
 from . import verify as verifymod
-from .paths import claude_projects_dir, default_config_path, vault_dir
+from .paths import as_project_dir, claude_projects_dir, default_config_path, vault_dir
 from .vault import Vault, VaultLocked, display, find_session, long_path, project_child, utc_now, write_bytes_atomic
 
 EXIT_OK = 0
@@ -34,6 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
     v = sub.add_parser("verify", help="元と保管庫を検査する")
     v.add_argument("session", nargs="?", help="セッション ID（省略時はすべて）")
     v.add_argument("--json", action="store_true", help="結果を JSON で出す")
+    v.add_argument("--project", help="このプロジェクトだけ検査する（プロジェクト名か、作業フォルダのパス）")
 
     r = sub.add_parser("repair", help="壊れたセッションを直した版を書き出す")
     r.add_argument("session", help="セッション ID")
@@ -124,7 +125,8 @@ def _cmd_verify(args, src: Path, vault: Path, cfg: dict) -> int:
     if not src.is_dir():
         print(f"元の場所がありません: {src}", file=sys.stderr)
         return EXIT_USAGE
-    findings = verifymod.run(src, vault, args.session, cfg.get("include_memory", True))
+    project = as_project_dir(args.project) if args.project else None
+    findings = verifymod.run(src, vault, args.session, cfg.get("include_memory", True), project)
     if args.json:
         # 読む側（RepoTether）がコンソールの文字コードに左右されないよう ASCII だけで出す
         print(json.dumps([f.to_dict() for f in findings], ensure_ascii=True, indent=1))
