@@ -9,7 +9,9 @@ Claude Code のセッション履歴 (`~/.claude/projects/` の JSONL) を、壊
 
 Python 標準ライブラリだけで動く。Claude History Viewer からはライブラリとして、RepoTether からは exe として呼ばれる想定。
 
-> **状態: 骨組みだけ。**サブコマンドは引数を受け付けるが、中身はまだ無い（実行すると「未実装」で終わる）。
+memory（`~/.claude/projects/<project>/memory/`）も世代付きで残す。セッションの記録から「どの会話でその memory を書いたか」を拾い、memory を会話の索引として使えるようにする（`memory-index`）。
+
+> **状態: 骨組みだけ。**動くのは `config` だけ。ほかのサブコマンドは引数を受け付けるが、実行すると「未実装」で終わる。
 > 設計は [docs/design.md](docs/design.md)。
 
 ## なぜ作るか
@@ -32,7 +34,20 @@ uv run sessionvault repair <session-id> --out fixed.jsonl
 uv run sessionvault restore <session-id>
 ```
 
-保管庫の場所は `--vault`、環境変数 `SESSIONVAULT_DIR`、既定の `~/.sessionvault` の順で決まる。
+## 設定
+
+保管庫は既定でプログラムの置き場所の下（exe ならそのフォルダ、リポジトリから動かすならリポジトリ直下）の `vault/` に作る。
+設定は同じ場所の `sessionvault.json`（見本: [sessionvault.sample.json](sessionvault.sample.json)）。手で書いても、コマンドで変えてもよい。
+
+```cmd
+uv run sessionvault config show                              :: 今の設定と、実際に使う保管庫の場所
+uv run sessionvault config set vault F:/Backup/SessionVault  :: 保管庫を移す（中身は自動では移さない）
+uv run sessionvault config set retention.max_generations 20  :: 1 ファイルあたり 20 世代まで残す
+uv run sessionvault config set retention.max_age_days null   :: 日数では消さない
+```
+
+保管庫の場所は `--vault` → 環境変数 `SESSIONVAULT_DIR` → 設定の `vault` → `<置き場所>/vault` の順で決まる。
+世代の間引き（`retention`）は既定では何も消さない。詳しくは [docs/design.md §2.1・§3.1](docs/design.md)。
 
 ## 開発
 

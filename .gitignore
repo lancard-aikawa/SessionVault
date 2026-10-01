@@ -3,3 +3,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# 手元の設定と、既定の保管庫（プログラムの置き場所の下に作られる）
+/sessionvault.json
+/vault/

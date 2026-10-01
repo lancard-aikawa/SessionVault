@@ -13,9 +13,25 @@
 | `<session-id>/subagents/agent-*.meta.json` | サブエージェントの付帯情報 | ○ |
 | `<session-id>/tool-results/*` | 長いツール結果を外に出したもの | ○ |
 | `<session-id>/auto-mode-classifier-error.txt` など | 診断用の出力 | × |
-| `memory/` | 自動メモリ | 未定（§7） |
+| `memory/*.md` | 自動メモリ | ○（§1.1） |
 
 `<project-dir>` は作業フォルダのパスを `C--work-claude` のように変換した名前。Claude Code が決めるので、そのまま使う。
+ただし**大文字・小文字が揺れる**（同じプロジェクトでセッションは `C--Repos-example-app`、memory は `c--Repos-example-app` にあった）。
+Windows では同じフォルダなので、プロジェクトを突き合わせるときは大文字・小文字を無視して比べる。保管庫の中では元の綴りのまま置く。
+
+### 1.1 memory の扱い
+
+memory はセッションと違って追記ではなく、書き換え・削除される。そのため、セッション以上に世代を残す意味がある。
+規則は §3 と同じで、中身が変わったら前の版を世代に入れる（「先頭が一致すれば上書き」は使わず、変わったら必ず世代に入れる）。
+
+memory の各ファイルには、どの会話から生まれたかが書かれていない。ただし、セッションの記録には memory への書き込みが残っている
+（2026-10-01 の実測: 36 セッションに Write 59 件・Edit 59 件。`tool_use` の `input.file_path` が `...\memory\*.md`）。
+これを拾えば、**memory を会話の索引として使える**。「この覚え書きはいつ、どの会話で書かれ、何度直されたか」を引ける。
+
+- `sessionvault memory-index` で、memory ファイルごとに `[(session-id, timestamp, Write|Edit)]` の一覧を作り、`<vault>/index/memory.json` に書く
+- 消えた memory も、世代とこの索引から「いつ、どの会話で消したか」まで辿れる
+- Viewer は、この索引を使って memory からセッションへ飛べる（Viewer 側の作業）
+- 優先度は backup / verify より後。backup が memory を世代付きで残していれば、索引は後からいつでも作り直せる
 
 ### セッション JSONL の中身（2026-10-01 の実測）
 
@@ -35,6 +51,35 @@
   generations/<project-dir>/<relpath>@<YYYYMMDDTHHMMSSZ>
                                      mirror から押し出された前の版
   log/<YYYY-MM>.jsonl                backup / repair / restore の記録（1 行 1 件）
+  index/memory.json                  memory と、それを書いたセッションの対応（§1.1）
+```
+
+### 2.1 保管庫の場所と設定ファイル
+
+保管庫は既定で**プログラムの置き場所の下**に作る。
+
+| 起動のしかた | プログラムの置き場所（`<app>`） |
+|---|---|
+| exe（PyInstaller） | exe のあるフォルダ |
+| `uv run sessionvault`（リポジトリから） | リポジトリのルート |
+
+- 設定ファイルは `<app>/sessionvault.json`。無ければ既定値で動く
+- 保管庫の場所は、`--vault` → 環境変数 `SESSIONVAULT_DIR` → 設定ファイルの `vault` → `<app>/vault` の順で決まる
+- 設定は手で書いても、`sessionvault config set <key> <value>` で変えてもよい。Claude に「保管庫を F: に移して」と頼めば、このコマンドで変えられる
+- 設定ファイルの場所は `--config` で変えられる。Viewer のように別のアプリから読み込むときは、`<app>` が決まらないので `--config` に当たる引数を必ず渡す
+- 設定ファイルには手元のパスが入るので git に入れない。見本は `sessionvault.sample.json`
+- 保管庫の場所を変えても、中身は自動では移さない（`config set vault` は「前の場所に保管庫が残っている」と表示するだけ）
+
+```json
+{
+  "vault": "F:/Backup/SessionVault",
+  "include_memory": true,
+  "retention": {
+    "max_generations": 20,
+    "max_age_days": 365,
+    "min_keep": 3
+  }
+}
 ```
 
 - `mirror/` を元と同じ木の形にしておくと、Viewer は今の `archive_dir/projects` を読むのと同じ処理で読める
@@ -56,7 +101,19 @@
 - 「先頭が一致する」は、mirror の長さ分だけ src を読んでハッシュを比べる。20 MB で数十 ms なので最初は素直に全部比べ、遅ければ末尾の数十 KB だけに減らす
 - コピーは一時ファイルに書いてから `os.replace` で置き換える（書きかけを残さない）
 - Claude Code が書いている最中のファイルを読むと、最後の行が途中で切れていることがある。最後の行が改行で終わっていなければ、その行を除いた長さまでをコピーする
-- 世代はいまのところ消さない。容量が問題になったら、世代の数か日数で間引く設定を足す
+### 3.1 世代の間引き
+
+設定の `retention` で決める。backup の最後に実行し、`sessionvault prune` で単独でも実行できる（`--dry-run` で消すものを表示するだけ）。
+
+| キー | 意味 | 既定 |
+|---|---|---|
+| `max_generations` | 1 ファイルあたり残す世代の数。超えたら古いものから消す | `null`（無制限） |
+| `max_age_days` | これより古い世代を消す | `null`（無制限） |
+| `min_keep` | 上の 2 つに当てはまっても、新しいものからこの数は残す | `3` |
+
+- 既定はどちらも無制限で、何も消さない。消すのは設定したときだけ
+- 間引くのは `generations/` だけ。`mirror/` は、元のファイルが消えていても消さない
+- 消したものは `log/` に記録する
 
 ## 4. verify の検査項目
 
@@ -86,7 +143,7 @@
 
 | 相手 | つなぎ方 |
 |---|---|
-| Claude History Viewer | `sessionvault` をパッケージとして読み込み、`archive.py` の代わりに `backup.run()` を呼ぶ。読み込み元は `mirror/` |
+| Claude History Viewer | `sessionvault` をパッケージとして読み込み、`archive.py` の代わりに `backup.run()` を呼ぶ。設定ファイルの場所は Viewer が渡す。読み込み元は `mirror/` |
 | RepoTether | `sessionvault.exe verify --json` を呼んで結果を表示する。書き込む操作は呼ばない（RepoTether は読むだけの方針） |
 | 定期実行 | タスクスケジューラで `sessionvault backup` を 30 分ごと。Claude Code の `SessionEnd` フックから呼ぶ案もある |
 
@@ -97,7 +154,11 @@ Viewer は `~/.claude/chat-viewer-archive/projects/`（`archive_dir` が空の�
 
 ## 7. 決めていないこと
 
-- `memory/` も守るか（セッションではないが、消えると困る）
-- 保管庫を別ドライブ（F:）に置くのを既定にするか
-- 世代の間引き方
 - exe にするときの配布の仕方（PkgUpdater と同じ PyInstaller で足りるか）
+- memory の索引を Viewer でどう見せるか
+
+### 決めたこと（2026-10-01）
+
+- memory も守る。世代付きで残し、セッションの記録から「どの会話で書いたか」の索引を作る（§1.1）
+- 保管庫の既定はプログラムの置き場所の下。設定ファイルか `config set` で変える（§2.1）
+- 世代の間引きは設定で決める。既定は消さない（§3.1）

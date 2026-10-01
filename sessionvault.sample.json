@@ -1,0 +1,9 @@
+{
+  "vault": "F:/Backup/SessionVault",
+  "include_memory": true,
+  "retention": {
+    "max_generations": 20,
+    "max_age_days": 365,
+    "min_keep": 3
+  }
+}

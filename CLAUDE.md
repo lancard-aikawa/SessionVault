@@ -7,3 +7,5 @@
 - `~/.claude/` を書き換えるのは `restore` と `repair --in-place` だけ。それ以外のコマンドで書き込む処理を入れない
 - テストで本物の `~/.claude/projects` を読まない。`tempfile` で木を作って `--src` / `--vault` を渡す
 - 知らない `type` のレコードは捨てずにそのまま扱う（Claude Code の版で増える）
+- `<project-dir>` は大文字・小文字が揺れる（`C--...` と `c--...`）。突き合わせは大文字・小文字を無視する
+- 設定のキーを足したら `config.py` の `DEFAULTS` と `_PARSERS`、`sessionvault.sample.json`、design.md §2.1 を一緒に直す
