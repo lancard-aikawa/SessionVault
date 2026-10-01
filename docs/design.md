@@ -171,6 +171,8 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
 - 終了コード: 0 = エラーなし（警告・情報だけなら 0）、1 = エラーあり、2 = 引数の誤り
 - `--json` で、1 件 1 オブジェクトの配列 `{session, project, path, check, severity, line, detail}` を出す。RepoTether はこれを読む。
   コンソールの文字コード（日本語の Windows では cp932）に左右されないよう、日本語は `\uXXXX` にして ASCII だけで出す
+- 出力先がコンソールでなく、パイプやファイルのときは、標準出力・標準エラーとも UTF-8 で出す（RepoTether はエラー文も UTF-8 として読む）。
+  PyInstaller の exe は `PYTHONIOENCODING` を読まないので、`cli._utf8_when_piped` で切り替える。コンソールに出すときは今までどおり
 - 並びはエラー → 警告 → 情報、その中はプロジェクト・パス・行の順
 - `--project` でそのプロジェクトだけを検査する（何度でも書ける）。プロジェクト名（`C--Repos-x`）か作業フォルダのパス（`C:\Repos\x`）を受け付ける。
   パスは Claude Code と同じく英数字以外をすべて `-` にして名前にし（`paths.project_dir_name`）、大文字・小文字を無視して突き合わせる。
