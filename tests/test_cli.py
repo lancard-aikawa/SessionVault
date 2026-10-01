@@ -28,8 +28,8 @@ class CliTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_unimplemented_subcommands_parse(self):
-        for argv in (["backup"], ["verify", "--json"], ["repair", "abc", "--out", "x.jsonl"],
-                     ["restore", "abc"], ["prune", "--dry-run"], ["memory-index"]):
+        for argv in (["verify", "--json"], ["repair", "abc", "--out", "x.jsonl"],
+                     ["restore", "abc"], ["memory-index"]):
             with self.subTest(argv=argv):
                 self.assertEqual(run(["--config", self.config, *argv])[0], 2)  # まだ未実装
 

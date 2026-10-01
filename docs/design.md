@@ -49,10 +49,14 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
   vault.json                         形式の版、元の場所、作成日時
   mirror/<project-dir>/...           最新の「正しい」版。~/.claude/projects と同じ木の形
   generations/<project-dir>/<relpath>@<YYYYMMDDTHHMMSSZ>
-                                     mirror から押し出された前の版
-  log/<YYYY-MM>.jsonl                backup / repair / restore の記録（1 行 1 件）
+                                     mirror から押し出された前の版。同じ秒に 2 回押し出したら末尾に -1, -2 …
+  log/<YYYY-MM>.jsonl                backup / prune / repair / restore の記録（1 行 1 件）
   index/memory.json                  memory と、それを書いたセッションの対応（§1.1）
+  index/src-missing.json             元から消えたと気づいたもの {"<project-dir>/<relpath>": 気づいた時刻}
 ```
+
+- 世代は名前に `@時刻` が付くので、パスが Windows の 260 文字を超えやすい（2026-10-01 に tool-results の長い名前で実際に失敗した）。
+  保管庫のパスは `\\?\` を付けた形で扱う（`vault.long_path`）
 
 ### 2.1 保管庫の場所と設定ファイル
 
@@ -96,11 +100,16 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
 | サイズと更新時刻が同じ | 何もしない | — |
 | src の方が長く、mirror の中身が src の先頭と一致する | mirror を上書き | `grow` |
 | src の方が短い、または先頭が一致しない | mirror を generations へ移してからコピー | `diverge` |
-| src が消えた | 何もしない（mirror は残す） | `src-missing`（初回だけ） |
+| （JSONL 以外）中身が変わった | mirror を generations へ移してからコピー | `change` |
+| サイズか更新時刻が違うが、中身は同じ | mirror の更新時刻だけ合わせる | — |
+| src が消えた | 何もしない（mirror は残す） | `src-missing`（初回だけ。`index/src-missing.json` で覚える） |
 
-- 「先頭が一致する」は、mirror の長さ分だけ src を読んでハッシュを比べる。20 MB で数十 ms なので最初は素直に全部比べ、遅ければ末尾の数十 KB だけに減らす
-- コピーは一時ファイルに書いてから `os.replace` で置き換える（書きかけを残さない）
-- Claude Code が書いている最中のファイルを読むと、最後の行が途中で切れていることがある。最後の行が改行で終わっていなければ、その行を除いた長さまでをコピーする
+- `grow` を使うのは追記で伸びる `*.jsonl` だけ。memory・`*.meta.json`・tool-results は、変わったら必ず世代に入れる（`change`）
+- 「先頭が一致する」は、src を丸ごと読んで mirror のバイト列と比べる。2026-10-01 の実測で、初回（766 件・865 MB）が 2.8 秒、変更なしの 2 回目が 0.1 秒台なので、ハッシュや末尾だけの比較にはしていない
+- コピーは一時ファイルに書いてから `os.replace` で置き換える（書きかけを残さない）。全部写せたときだけ mirror の更新時刻を src に合わせる
+- Claude Code が書いている最中のファイルを読むと、最後の行が途中で切れていることがある。最後の行が改行で終わっていなければ、その行を除いた長さまでをコピーする。改行で終わる行が 1 つも無ければ写さない
+- 保管庫に同じプロジェクトが別の綴り（`C--` と `c--`）で既にあれば、そちらへ入れる
+- 読めないファイルがあっても止めずに残りを写し、最後に一覧を出して終了コード 1
 ### 3.1 世代の間引き
 
 設定の `retention` で決める。backup の最後に実行し、`sessionvault prune` で単独でも実行できる（`--dry-run` で消すものを表示するだけ）。
@@ -155,6 +164,7 @@ Viewer は `~/.claude/chat-viewer-archive/projects/`（`archive_dir` が空の�
 ## 7. 決めていないこと
 
 - exe にするときの配布の仕方（PkgUpdater と同じ PyInstaller で足りるか）
+- プロジェクト直下の `sessions-index.json`（2026-10-01 に 2 件だけあった）を守る対象に入れるか。今は入れていない
 - memory の索引を Viewer でどう見せるか
 
 ### 決めたこと（2026-10-01）

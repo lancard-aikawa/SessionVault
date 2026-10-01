@@ -5,8 +5,11 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from . import backup as backupmod
 from . import config as cfgmod
+from . import prune as prunemod
 from .paths import claude_projects_dir, default_config_path, vault_dir
+from .vault import Vault, utc_now
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
@@ -82,6 +85,34 @@ def _cmd_config(args, config_path: Path, cfg: dict) -> int:
     return EXIT_OK
 
 
+def _cmd_backup(src: Path, vault: Path, cfg: dict) -> int:
+    if not src.is_dir():
+        print(f"元の場所がありません: {src}", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        result = backupmod.run(src, vault, cfg)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return EXIT_USAGE
+    counts = ", ".join(f"{k} {v}" for k, v in sorted(result.counts.items())) or "変更なし"
+    print(f"backup: {counts}（{vault}）")
+    if result.pruned:
+        print(f"prune: {len(result.pruned)} 世代を消しました")
+    for project, rel, msg in result.errors:
+        print(f"読めません: {project}/{rel}: {msg}", file=sys.stderr)
+    return EXIT_PROBLEMS if result.errors else EXIT_OK
+
+
+def _cmd_prune(args, vault: Path, cfg: dict) -> int:
+    v = Vault(vault)
+    doomed = prunemod.run(v, cfg["retention"], utc_now(), dry_run=args.dry_run)
+    for f in doomed:
+        print(f.relative_to(v.root).as_posix())
+    verb = "消します" if args.dry_run else "消しました"
+    print(f"prune: {len(doomed)} 世代を{verb}", file=sys.stderr)
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     config_path = Path(args.config) if args.config else default_config_path()
@@ -96,6 +127,10 @@ def main(argv: list[str] | None = None) -> int:
 
     src = Path(args.src) if args.src else claude_projects_dir()
     vault = vault_dir(args.vault, cfg["vault"])
+    if args.command == "backup":
+        return _cmd_backup(src, vault, cfg)
+    if args.command == "prune":
+        return _cmd_prune(args, vault, cfg)
     print(f"{args.command}: 未実装です（src={src}, vault={vault}）", file=sys.stderr)
     return EXIT_USAGE
 
