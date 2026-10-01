@@ -7,12 +7,14 @@ from pathlib import Path
 from . import __version__
 from . import backup as backupmod
 from . import config as cfgmod
+from . import importer as importmod
+from . import memindex as memindexmod
 from . import prune as prunemod
 from . import repair as repairmod
 from . import restore as restoremod
 from . import verify as verifymod
 from .paths import claude_projects_dir, default_config_path, vault_dir
-from .vault import Vault, find_session, long_path, project_child, utc_now, write_bytes_atomic
+from .vault import Vault, display, find_session, long_path, project_child, utc_now, write_bytes_atomic
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
@@ -196,6 +198,36 @@ def _cmd_restore(args, src: Path, vault: Path) -> int:
     return EXIT_OK
 
 
+def _cmd_import(args, src: Path, vault: Path) -> int:
+    other = Path(args.dir)
+    if not other.is_dir():
+        print(f"フォルダがありません: {other}", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        result = importmod.run(other, src, vault)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return EXIT_USAGE
+    counts = ", ".join(f"{k} {v}" for k, v in sorted(result.counts.items())) or "対象なし"
+    print(f"import: {counts}（{vault}）")
+    for project, rel, msg in result.errors:
+        print(f"読めません: {project}/{rel}: {msg}", file=sys.stderr)
+    return EXIT_PROBLEMS if result.errors else EXIT_OK
+
+
+def _cmd_memory_index(src: Path, vault: Path) -> int:
+    try:
+        index, path = memindexmod.run(src, vault)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return EXIT_USAGE
+    memory = index["memory"]
+    writes = sum(len(m["writes"]) for m in memory.values())
+    gone = sum(not m["exists"] for m in memory.values())
+    print(f"memory-index: memory {len(memory)} 件（うち消えたもの {gone}）、書き込み {writes} 件 → {display(path)}")
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     config_path = Path(args.config) if args.config else default_config_path()
@@ -220,7 +252,11 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_repair(args, src, vault, cfg)
     if args.command == "restore":
         return _cmd_restore(args, src, vault)
-    print(f"{args.command}: 未実装です（src={src}, vault={vault}）", file=sys.stderr)
+    if args.command == "import":
+        return _cmd_import(args, src, vault)
+    if args.command == "memory-index":
+        return _cmd_memory_index(src, vault)
+    print(f"{args.command}: 知らないコマンドです", file=sys.stderr)
     return EXIT_USAGE
 
 

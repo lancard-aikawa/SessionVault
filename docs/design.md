@@ -28,8 +28,23 @@ memory の各ファイルには、どの会話から生まれたかが書かれ�
 （2026-10-01 の実測: 36 セッションに Write 59 件・Edit 59 件。`tool_use` の `input.file_path` が `...\memory\*.md`）。
 これを拾えば、**memory を会話の索引として使える**。「この覚え書きはいつ、どの会話で書かれ、何度直されたか」を引ける。
 
-- `sessionvault memory-index` で、memory ファイルごとに `[(session-id, timestamp, Write|Edit)]` の一覧を作り、`<vault>/index/memory.json` に書く
-- 消えた memory も、世代とこの索引から「いつ、どの会話で消したか」まで辿れる
+- `sessionvault memory-index` で、memory ファイルごとに書き込みの一覧を作り、`<vault>/index/memory.json` に書く
+
+  ```json
+  {"generated": "2026-10-01T02:29:00+00:00",
+   "memory": {"C--work-claude/memory/MEMORY.md": {
+     "exists": true,
+     "writes": [{"session": "…", "project": "C--work-claude", "subagent": false,
+                 "timestamp": "2026-09-08T09:49:40.747Z", "tool": "Edit", "ok": true}]}}}
+  ```
+
+  - 拾うのは `Write` `Edit` `MultiEdit` の `tool_use` で、`input.file_path` が `…\.claude\projects\<project-dir>\memory\<name>.md` のもの。`Read` は数えない
+  - `ok` は、対応する `tool_result` が `is_error: true` なら false
+  - mirror と src の両方を読み、同じ `tool_use` の id は 1 回だけ数える（src から消えたセッションも mirror に残っている）
+  - キーの `<project-dir>` は、今ある memory フォルダの綴りに寄せる（パスには `c--`、フォルダは `C--` ということがある）
+  - `exists` は今の src にその memory があるか
+  - 2026-10-01 の実測: memory 56 件・書き込み 120 件・消えたもの 4 件、4.4 秒
+- 消えた memory も、世代とこの索引から「どの会話で書いたか」までは辿れる。Bash の `rm` などで消した記録は、コマンドの文字列から確実には拾えないので索引に入れていない
 - Viewer は、この索引を使って memory からセッションへ飛べる（Viewer 側の作業）
 - 優先度は backup / verify より後。backup が memory を世代付きで残していれば、索引は後からいつでも作り直せる
 
@@ -179,7 +194,17 @@ Claude Code の書き直しとみて警告のままにする。
 ### Viewer の既存のバックアップからの移行
 
 Viewer は `~/.claude/chat-viewer-archive/projects/`（`archive_dir` が空のとき）に同じ木の形でコピーしている。
-`sessionvault import <dir>` で、その中身を `mirror/` に取り込む（mirror に無いものだけ。食い違えば世代に入れる）。
+`sessionvault import <dir>` で、その中身を保管庫に取り込む。`~/.claude/` も取り込み元も書き換えない。
+
+| 状況 | 処理 | ログの種類 |
+|---|---|---|
+| mirror に無い | mirror へコピー | `new` |
+| 中身が同じ | 何もしない | —（数だけ `same`） |
+| JSONL で、取り込む側が mirror の先頭部分 | 何もしない（失うものが無い） | —（数だけ `older`） |
+| JSONL で、取り込む側が mirror の続きまである | mirror を上書き | `grow` |
+| それ以外で中身が違う | 取り込む側を世代に入れる。mirror は変えない | `generation` |
+
+2026-10-01 に Viewer の archive（334 ファイル）で試した結果: same 331、grow 3、食い違い 0。
 
 ## 7. 決めていないこと
 

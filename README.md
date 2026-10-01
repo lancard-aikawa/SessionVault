@@ -11,7 +11,7 @@ Python 標準ライブラリだけで動く。Claude History Viewer からはラ
 
 memory（`~/.claude/projects/<project>/memory/`）も世代付きで残す。セッションの記録から「どの会話でその memory を書いたか」を拾い、memory を会話の索引として使えるようにする（`memory-index`）。
 
-> **状態: 作りかけ。**動くのは `config`・`backup`・`prune`・`verify`・`repair`・`restore`。ほかのサブコマンドは引数を受け付けるが、実行すると「未実装」で終わる。
+> **状態: サブコマンドはすべて動く。**まだ exe にしておらず、定期実行や Viewer・RepoTether とのつなぎ込みもこれから。
 > 設計は [docs/design.md](docs/design.md)。
 
 ## なぜ作るか
@@ -30,10 +30,18 @@ Claude History Viewer (`F:\Repos\My\ClaudeChat`) の `claudehistory/archive.py` 
 uv run sessionvault backup                 :: ~/.claude/projects を保管庫へ
 uv run sessionvault verify                 :: 元と保管庫を検査（問題があれば終了コード 1）
 uv run sessionvault verify --json          :: RepoTether 向けの機械可読な出力
-uv run sessionvault repair <session-id> --out fixed.jsonl
-uv run sessionvault restore <session-id> --list   :: 戻せる版の一覧
+uv run sessionvault repair <session-id> --out fixed.jsonl   :: 直した版を書き出すだけ
+uv run sessionvault repair <session-id> --in-place          :: 元を置き換える（先に保管庫へ退避）
+uv run sessionvault restore <session-id>                    :: mirror の版へ戻す
+uv run sessionvault restore <session-id> --list             :: 戻せる版の一覧
 uv run sessionvault restore <session-id> --generation 20261001T022703Z
+uv run sessionvault prune --dry-run                         :: retention で消える世代を見る
+uv run sessionvault import %USERPROFILE%\.claude\chat-viewer-archive\projects   :: Viewer の控えを取り込む
+uv run sessionvault memory-index                            :: memory ごとに、書いた会話の一覧を作る
 ```
+
+repair と restore は `~/.claude/` を書き換える。対象のセッションを Claude Code で開いていないときに使う。
+`repair --in-place` のあと、壊れる前の版は mirror ではなく世代の側にある（`restore --list` で見る）。
 
 ## 設定
 

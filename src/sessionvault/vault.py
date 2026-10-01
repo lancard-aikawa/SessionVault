@@ -36,6 +36,14 @@ def long_path(p: Path) -> Path:
     return Path("\\\\?\\" + s)
 
 
+def display(p: Path) -> str:
+    """人に見せるときは \\\\?\\ を外す"""
+    s = str(p)
+    if s.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + s[8:]
+    return s[4:] if s.startswith("\\\\?\\") else s
+
+
 class Vault:
     def __init__(self, root: Path):
         self.root = long_path(root)

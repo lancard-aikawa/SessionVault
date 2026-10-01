@@ -27,10 +27,11 @@ class CliTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_unimplemented_subcommands_parse(self):
-        for argv in (["import", "x"], ["memory-index"]):
+    def test_missing_src_or_dir_is_usage_error(self):
+        missing = str(Path(self.tmp.name) / "nope")
+        for argv in (["backup"], ["verify"], ["import", missing]):
             with self.subTest(argv=argv):
-                self.assertEqual(run(["--config", self.config, *argv])[0], 2)  # まだ未実装
+                self.assertEqual(run(["--config", self.config, "--src", missing, "--vault", missing, *argv])[0], 2)
 
     def test_repair_needs_destination(self):
         with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
