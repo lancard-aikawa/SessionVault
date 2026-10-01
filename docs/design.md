@@ -206,8 +206,8 @@ Claude Code の書き直しとみて警告のままにする。
 
 | 相手 | つなぎ方 |
 |---|---|
-| Claude History Viewer | `sessionvault` をパッケージとして読み込み、`archive.py` の代わりに `backup.run()` を呼ぶ。設定ファイルの場所は Viewer が渡す。読み込み元は `mirror/` |
-| RepoTether | `sessionvault.exe verify --json` を呼んで結果を表示する。書き込む操作は呼ばない（RepoTether は読むだけの方針） |
+| Claude History Viewer | Viewer の設定 `sessionvault_src` に、このリポジトリの `src` を書く。Viewer はそこを `sys.path` に足して `sessionvault` を読み込み、`archive.py` のスレッドで `backup.run()` を呼ぶ（`VaultLocked` ならその回を見送る）。変化があったときと起動直後に `memindex.run()` も呼ぶ。設定と保管庫の場所は `paths.default_config_path()`（= このリポジトリの `sessionvault.json`）に従う。読み込み元は `mirror/`（と、前に内蔵のバックアップで写した控え）。memory の一覧と「書いた会話」へのリンクは Viewer のヘッダーの「メモリ」。読み込めなければ Viewer は内蔵のバックアップで動く（Viewer `fc94c09`） |
+| RepoTether | 詳細パネルの Claude タブの「ログの検査」で、`sessionvault.exe --src <ログの場所> verify --json --project <フォルダ名>...` を呼ぶ。フォルダ名は、そのリポジトリに振り分けたセッションのログのあるフォルダ（サブフォルダで始めた会話を含む）。exe の場所は RepoTether の設定（空なら PATH）。保管庫の場所は exe の隣の `sessionvault.json`。書き込む操作は呼ばない（RepoTether は読むだけの方針。RepoTether `dc48c15`） |
 | 定期実行 | タスクスケジューラで `sessionvault backup` を 30 分ごととログオン時（`scripts/register-task.ps1`）。`.venv/Scripts/pythonw.exe -m sessionvault backup` で窓を出さない。`SessionEnd` フックは使っていない |
 
 ### Viewer の既存のバックアップからの移行
@@ -227,9 +227,8 @@ Viewer は `~/.claude/chat-viewer-archive/projects/`（`archive_dir` が空の�
 
 ## 7. 決めていないこと
 
-- memory の索引を Viewer でどう見せるか
-- RepoTether・Viewer へのつなぎ込み（どちらも別のリポジトリでの作業）
 - `diverged` を repair で直すときの選ばせ方（§5）
+- 保管庫ができる前に消えた memory の本文を、セッションの記録（Write の `input.content`）から組み立て直すか
 
 ### 決めたこと（2026-10-01）
 
