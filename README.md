@@ -97,3 +97,8 @@ uv run sessionvault --help
 - Python 3.10 以上、実行時の依存なし
 - ファイルを開くときは必ず `encoding="utf-8"` を付ける
 - `~/.claude/` の中身は、`restore` と `repair --in-place` 以外では書き換えない
+
+## ライセンス
+
+MIT（[LICENSE](LICENSE)）
+
