@@ -96,10 +96,10 @@ def _check_mirror(data: bytes, mirror_file: Path, project: str, rel: str, out: l
 
 
 def run(src: Path, vault_root: Path | None = None, session: str | None = None,
-        include_memory: bool = True, project: str | None = None) -> list[Finding]:
-    """project はプロジェクト名（大文字・小文字は無視）。そのプロジェクトだけを検査する"""
+        include_memory: bool = True, projects: list[str] | None = None) -> list[Finding]:
+    """projects はプロジェクト名の一覧（大文字・小文字は無視）。そのプロジェクトだけを検査する"""
     src = long_path(src)
-    want_project = project.casefold() if project else None
+    want_project = {p.casefold() for p in projects} if projects else None
     vault = Vault(vault_root) if vault_root else None
     use_mirror = vault is not None and vault.mirror.is_dir()
     want = session.casefold() if session else None
@@ -109,7 +109,7 @@ def run(src: Path, vault_root: Path | None = None, session: str | None = None,
     mproject_of: dict[str, str] = {}
 
     for t in iter_targets(src, include_memory):
-        if want_project and t.project.casefold() != want_project:
+        if want_project and t.project.casefold() not in want_project:
             continue
         sid = session_of(t.rel)
         seen.add((t.project.casefold(), t.rel.casefold()))
@@ -133,7 +133,7 @@ def run(src: Path, vault_root: Path | None = None, session: str | None = None,
 
     if use_mirror:
         for project in sorted(vault.mirror.iterdir()):
-            if not project.is_dir() or (want_project and project.name.casefold() != want_project):
+            if not project.is_dir() or (want_project and project.name.casefold() not in want_project):
                 continue
             for f in sorted(project.rglob("*")):
                 if not f.is_file() or f.name.endswith(".sv-tmp"):

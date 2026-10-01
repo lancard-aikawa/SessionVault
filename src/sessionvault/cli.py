@@ -34,7 +34,8 @@ def _build_parser() -> argparse.ArgumentParser:
     v = sub.add_parser("verify", help="元と保管庫を検査する")
     v.add_argument("session", nargs="?", help="セッション ID（省略時はすべて）")
     v.add_argument("--json", action="store_true", help="結果を JSON で出す")
-    v.add_argument("--project", help="このプロジェクトだけ検査する（プロジェクト名か、作業フォルダのパス）")
+    v.add_argument("--project", action="append",
+                   help="このプロジェクトだけ検査する（プロジェクト名か、作業フォルダのパス。何度でも書ける）")
 
     r = sub.add_parser("repair", help="壊れたセッションを直した版を書き出す")
     r.add_argument("session", help="セッション ID")
@@ -125,8 +126,8 @@ def _cmd_verify(args, src: Path, vault: Path, cfg: dict) -> int:
     if not src.is_dir():
         print(f"元の場所がありません: {src}", file=sys.stderr)
         return EXIT_USAGE
-    project = as_project_dir(args.project) if args.project else None
-    findings = verifymod.run(src, vault, args.session, cfg.get("include_memory", True), project)
+    projects = [as_project_dir(p) for p in args.project] if args.project else None
+    findings = verifymod.run(src, vault, args.session, cfg.get("include_memory", True), projects)
     if args.json:
         # 読む側（RepoTether）がコンソールの文字コードに左右されないよう ASCII だけで出す
         print(json.dumps([f.to_dict() for f in findings], ensure_ascii=True, indent=1))
