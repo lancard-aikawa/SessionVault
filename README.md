@@ -45,12 +45,12 @@ repair と restore は `~/.claude/` を書き換える。対象のセッショ�
 
 ## 定期実行
 
-タスクスケジューラに 30 分ごと（とログオン時）の backup を登録する。リポジトリの `.venv` の `pythonw.exe` で動くので窓は開かない。
+タスクスケジューラに 30 分ごと（とログオン時）の backup を登録する。本体の Python の `pythonw.exe`（`.venv\pyvenv.cfg` の `home`）で `scripts\sessionvault-launch.py` を動かすので窓は開かない（uv 0.11 の `.venv\Scripts\pythonw.exe` はコンソール用で、そこから動かすと黒い窓が開く）。
 
 ```cmd
 uv sync
-pwsh -File scripts\register-task.ps1                :: 登録（-Minutes 15 で間隔を変える）
-pwsh -File scripts\register-task.ps1 -Unregister    :: 消す
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-task.ps1                :: 登録（-Minutes 15 で間隔を変える）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-task.ps1 -Unregister    :: 消す
 ```
 
 結果は保管庫の `log/` と、タスクの「前回の実行結果」（0 = 成功、1 = 読めないファイルがあった・別の実行と重なった）で見る。
