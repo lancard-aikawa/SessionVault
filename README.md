@@ -45,10 +45,9 @@ repair と restore は `~/.claude/` を書き換える。対象のセッショ�
 
 ## 定期実行
 
-タスクスケジューラに 30 分ごと（とログオン時）の backup を登録する。本体の Python の `pythonw.exe`（`.venv\pyvenv.cfg` の `home`）で `scripts\sessionvault-launch.py` を動かすので窓は開かない（uv 0.11 の `.venv\Scripts\pythonw.exe` はコンソール用で、そこから動かすと黒い窓が開く）。
+タスクスケジューラに 30 分ごと（とログオン時）の backup を登録する。本体の Python の `pythonw.exe` で `scripts\sessionvault-launch.py` を動かすので窓は開かない。`scripts\find-pythonw.ps1` が Python 3.10 以上を探す（`.venv` の `home`、`uv python find`、`py`、PATH の `python` の順。venv の中のものは本体に置き換える）。実行時の依存が無いので `.venv` は要らない（uv 0.11 の `.venv\Scripts\pythonw.exe` はコンソール用で、そこから動かすと黒い窓が開く）。
 
 ```cmd
-uv sync
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-task.ps1                :: 登録（-Minutes 15 で間隔を変える）
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-task.ps1 -Unregister    :: 消す
 ```
